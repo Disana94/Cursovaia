@@ -1,6 +1,10 @@
 #include <iostream>
 #include <string>
 #include <iomanip>
+#include <limits>
+#include <sstream>
+#include <algorithm>
+
 using namespace std;
 
 class MedicalSystem {
@@ -13,8 +17,10 @@ public:
         : load(l), coef(c), hosp(h), resources(r), seasonal(s) {}
 
     void showResults() {
-        cout << fixed << setprecision(2);
-        cout << "Прогноз нагрузки: " << calculateLoad() << "%" << endl;
+        double forecastValue = calculateLoad();
+        string forecastSign = forecastValue >= 0 ? "+" : "";
+        cout << fixed << setprecision(0);
+        cout << "Прогноз нагрузки: " << forecastSign << forecastValue << "%" << endl;
         cout << "Пик нагрузки: через " << getPeakDays() << " дней" << endl;
         cout << "Критический ресурс: " << getCriticalResource() << endl;
         cout << "Рекомендации: " << getRecommendations() << endl;
@@ -51,9 +57,70 @@ private:
     }
 };
 
+// Функция для замены запятых на точки
+void replaceCommaWithDot(string& str) {
+    replace(str.begin(), str.end(), ',', '.');
+}
+
 double getInputWithDefault(string msg, double min, double max, double defaultValue) {
     while (true) {
-        cout << msg << " (по умолчанию " << defaultValue << "): ";
+        // Для доли госпитализации показываем два знака после запятой
+        if (min == 0.01) {
+            cout << msg << " (от " << fixed << setprecision(2) << min 
+                 << " до " << setprecision(1) << max 
+                 << ", по умолчанию " << setprecision(1) << defaultValue << "): ";
+        } else {
+            cout << msg << " (от " << fixed << setprecision(1) << min 
+                 << " до " << setprecision(1) << max 
+                 << ", по умолчанию " << setprecision(1) << defaultValue << "): ";
+        }
+        
+        string input;
+        getline(cin, input);
+        
+        if (input.empty()) {
+            cout << "Используется значение по умолчанию: " 
+                 << fixed << setprecision(1) << defaultValue << endl;
+            return defaultValue;
+        }
+        
+        try {
+            // Заменяем запятые на точки для корректного парсинга
+            replaceCommaWithDot(input);
+            
+            // Используем stringstream для преобразования строки в double
+            stringstream ss(input);
+            double value;
+            ss >> value;
+            
+            // Проверяем, что преобразование прошло успешно
+            if (ss.fail() || !ss.eof()) {
+                throw invalid_argument("Не число");
+            }
+            
+            if (value >= min && value <= max) {
+                return value;
+            } else {
+                if (min == 0.01) {
+                    cout << "Ошибка! Число должно быть от " 
+                         << fixed << setprecision(2) << min 
+                         << " до " << setprecision(1) << max << "!" << endl;
+                } else {
+                    cout << "Ошибка! Число должно быть от " 
+                         << fixed << setprecision(1) << min 
+                         << " до " << setprecision(1) << max << "!" << endl;
+                }
+            }
+        } catch (...) {
+            cout << "Ошибка! Введите именно число (можно с запятой или точкой)!" << endl;
+        }
+    }
+}
+
+int getIntInputWithDefault(string msg, int min, int max, int defaultValue) {
+    while (true) {
+        cout << msg << " (от " << min << " до " << max 
+             << ", по умолчанию " << defaultValue << "): ";
         
         string input;
         getline(cin, input);
@@ -63,9 +130,16 @@ double getInputWithDefault(string msg, double min, double max, double defaultVal
             return defaultValue;
         }
         
-        
         try {
-            double value = stod(input);
+            // Используем stringstream для преобразования строки в int
+            stringstream ss(input);
+            int value;
+            ss >> value;
+            
+            // Проверяем, что преобразование прошло успешно
+            if (ss.fail() || !ss.eof()) {
+                throw invalid_argument("Не число");
+            }
             
             if (value >= min && value <= max) {
                 return value;
@@ -73,33 +147,7 @@ double getInputWithDefault(string msg, double min, double max, double defaultVal
                 cout << "Ошибка! Число должно быть от " << min << " до " << max << "!" << endl;
             }
         } catch (...) {
-            cout << "Ошибка! Введите число или нажмите Enter для значения по умолчанию." << endl;
-        }
-    }
-}
-
-int getIntInputWithDefault(string msg, int min, int max, int defaultValue) {
-    while (true) {
-        cout << msg << " (по умолчанию " << defaultValue << "): ";
-        
-        string input;
-        getline(cin, input);
-        
-        if (input.empty()) {
-            cout << "Используется значение по умолчанию: " << defaultValue << endl;
-            return defaultValue;
-        }
-        
-        try {
-            int value = stoi(input);
-        
-            if (value >= min && value <= max) {
-                return value;
-            } else {
-                cout << "Ошибка! Число должно быть от " << min << " до " << max << "!" << endl;
-            }
-        } catch (...) {
-            cout << "Ошибка! Введите целое число или нажмите Enter для значения по умолчанию." << endl;
+            cout << "Ошибка! Введите именно целое число!" << endl;
         }
     }
 }
@@ -117,52 +165,77 @@ void showMenu() {
         cout << "2. Тестирование" << endl;
         cout << "3. Выход" << endl;
         
-        int choice;
         cout << "Выберите пункт (1-3): ";
-        cin >> choice;
-        cin.ignore(); // Очищаем буфер
         
-        if (choice == 1) {
-            cout << "\n=== ВВОД ДАННЫХ ===" << endl;
-            cout << "Для использования значений по умолчанию просто нажмите Enter" << endl;
-            
-            int load = getIntInputWithDefault("Текущая нагрузка (% от 1 до 200)", 1, 200, DEFAULT_LOAD);
-            double coef = getInputWithDefault("Коэффициент заболеваемости (от 0.1 до 3.0)", 0.1, 3.0, DEFAULT_COEF);
-            double hosp = getInputWithDefault("Доля госпитализации (от 0.01 до 0.5)", 0.01, 0.5, DEFAULT_HOSP);
-            double res = getInputWithDefault("Доступность ресурсов (от 0.1 до 1.0)", 0.1, 1.0, DEFAULT_RESOURCES);
-            double season = getInputWithDefault("Сезонный фактор (от 0.5 до 2.0)", 0.5, 2.0, DEFAULT_SEASONAL);
-            
-            MedicalSystem ms(load, coef, hosp, res, season);
-            cout << "\n=== РЕЗУЛЬТАТЫ ===" << endl;
-            ms.showResults();
-        }
-        else if (choice == 2) {
+        string input;
+        getline(cin, input);
         
-            MedicalSystem test1(100, 1.2, 0.1, 0.8, 1.1);
-            MedicalSystem test2(150, 1.8, 0.2, 0.6, 1.3);
-            MedicalSystem test3(80, 0.8, 0.05, 0.9, 0.7);
-            MedicalSystem test4(50, 2.8, 0.4, 0.3, 1.8);
+        if (input.empty()) {
+            cout << "Ошибка! Введите число от 1 до 3!" << endl;
+            continue;
+        }
+        
+        try {
+            // Используем stringstream для преобразования строки в int
+            stringstream ss(input);
+            int choice;
+            ss >> choice;
             
-            cout << "Тест 1 (нормальные условия):" << endl;
-            test1.showResults();
-            cout << "\nТест 2 (высокая нагрузка):" << endl;
-            test2.showResults();
-            cout << "\nТест 3 (низкая нагрузка):" << endl;
-            test3.showResults();
-            cout << "\nТест 4 (критические условия):" << endl;
-            test4.showResults();
-        }
-        else if (choice == 3) {
-            cout << "Выход из программы..." << endl;
-            cout << "Нажмите Enter для закрытия...";
-            cin.ignore();
-            cin.get();
-            return;
-        }
-        else {
-            cout << "Неверный выбор! Введите число от 1 до 3." << endl;
-            cin.clear();
-            cin.ignore(1000, '\n');
+            // Проверяем, что преобразование прошло успешно
+            if (ss.fail() || !ss.eof()) {
+                throw invalid_argument("Не число");
+            }
+            
+            if (choice == 1) {
+                cout << "\n=== ВВОД ДАННЫХ ===" << endl;
+                cout << "Для использования значений по умолчанию просто нажмите Enter" << endl;
+                
+                int load = getIntInputWithDefault("Текущая нагрузка (% от мощности)", 10, 200, DEFAULT_LOAD);
+                double coef = getInputWithDefault("Коэффициент заболеваемости (отношение к среднему)", 0.1, 5.0, DEFAULT_COEF);
+                double hosp = getInputWithDefault("Доля госпитализации", 0.01, 0.5, DEFAULT_HOSP);
+                double res = getInputWithDefault("Доступность ресурсов", 0.1, 1.0, DEFAULT_RESOURCES);
+                double season = getInputWithDefault("Сезонный фактор", 0.5, 3.0, DEFAULT_SEASONAL);
+                
+                MedicalSystem ms(load, coef, hosp, res, season);
+                cout << "\n=== РЕЗУЛЬТАТЫ ===" << endl;
+                ms.showResults();
+            }
+            else if (choice == 2) {
+                // Тестирование из оригинального кода
+                MedicalSystem test1(100, 1.2, 0.1, 0.8, 1.1);
+                MedicalSystem test2(150, 1.8, 0.2, 0.6, 1.3);
+                MedicalSystem test3(80, 0.8, 0.05, 0.9, 0.7);
+                MedicalSystem test4(50, 2.8, 0.4, 0.3, 1.8);
+                
+                cout << "\n=== ТЕСТИРОВАНИЕ ===" << endl;
+                
+                cout << "\nТест 1 (нормальные условия):" << endl;
+                cout << "Ввод: [100, 1.2, 0.1, 0.8, 1.1]" << endl;
+                test1.showResults();
+                
+                cout << "\nТест 2 (высокая нагрузка):" << endl;
+                cout << "Ввод: [150, 1.8, 0.2, 0.6, 1.3]" << endl;
+                test2.showResults();
+                
+                cout << "\nТест 3 (низкая нагрузка):" << endl;
+                cout << "Ввод: [80, 0.8, 0.05, 0.9, 0.7]" << endl;
+                test3.showResults();
+                
+                cout << "\nТест 4 (критические условия):" << endl;
+                cout << "Ввод: [50, 2.8, 0.4, 0.3, 1.8]" << endl;
+                test4.showResults();
+            }
+            else if (choice == 3) {
+                cout << "Выход из программы..." << endl;
+                cout << "Нажмите Enter для закрытия...";
+                cin.get();
+                return;
+            }
+            else {
+                cout << "Неверный выбор! Введите число от 1 до 3." << endl;
+            }
+        } catch (...) {
+            cout << "Ошибка! Введите именно число от 1 до 3!" << endl;
         }
     }
 }
